@@ -9,11 +9,11 @@ from statsmodels.nonparametric.smoothers_lowess import lowess
 
 from helpers import loguniform
 
-df = pd.read_csv("data/StudentsPerformance.csv")
+df = pd.read_csv(r"data\Korea Income and Welfare.csv")
 df.info()
 
-y = df["math score"]
-X = df.drop(["reading score", "writing score", "math score"], axis=1)
+y = df["income"]
+X = df.drop(["income"], axis=1)
 
 obj_cols = X.select_dtypes("object").columns
 X[obj_cols] = X[obj_cols].astype("category")
@@ -26,8 +26,8 @@ dt = lgb.Dataset(Xt, yt, silent=True)
 dv = lgb.Dataset(Xv, yv, silent=True)
 
 
-OBJECTIVE = "regression"
-METRIC = "rmse"
+OBJECTIVE = "l1"
+METRIC = "l1"
 MAXIMIZE = False
 EARLY_STOPPING_ROUNDS = 10
 MAX_ROUNDS = 10000
@@ -51,8 +51,8 @@ model = lgb.train(
 
 best_etas = {"learning_rate": [], "score": []}
 
-for _ in range(60):
-    eta = loguniform(-5, 0)
+for _ in range(30):
+    eta = loguniform(-4, 0)
     best_etas["learning_rate"].append(eta)
     params["learning_rate"] = eta
     model = lgb.train(
@@ -151,6 +151,23 @@ print(
     f"dropped features: {correlated_features if len(correlated_features) > 0 else None}"
 )
 
+X = X.drop(correlated_features, axis=1)
+Xt, Xv, yt, yv = train_test_split(
+    X, y, random_state=SEED
+)  # split into train and validation set
+dt = lgb.Dataset(Xt, yt, silent=True)
+dv = lgb.Dataset(Xv, yv, silent=True)
+
+model = lgb.train(
+    params,
+    dt,
+    valid_sets=[dt, dv],
+    valid_names=["training", "valid"],
+    num_boost_round=MAX_ROUNDS,
+    early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+    verbose_eval=REPORT_ROUNDS,
+)
+
 sorted_features = [
     feature
     for _, feature in sorted(
@@ -189,6 +206,23 @@ for feature in sorted_features:
 print(f"ending score: {best_score:.4f}")
 print(
     f"dropped features: {unimportant_features if len(unimportant_features) > 0 else None}"
+)
+
+X = X.drop(unimportant_features, axis=1)
+Xt, Xv, yt, yv = train_test_split(
+    X, y, random_state=SEED
+)  # split into train and validation set
+dt = lgb.Dataset(Xt, yt, silent=True)
+dv = lgb.Dataset(Xv, yv, silent=True)
+
+model = lgb.train(
+    params,
+    dt,
+    valid_sets=[dt, dv],
+    valid_names=["training", "valid"],
+    num_boost_round=MAX_ROUNDS,
+    early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+    verbose_eval=REPORT_ROUNDS,
 )
 
 import optuna.integration.lightgbm as lgb
